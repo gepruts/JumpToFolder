@@ -1,4 +1,4 @@
-﻿$ThisVersion := "1.0.5"
+﻿$ThisVersion := "1.0.6"
 ;
 
 /*
@@ -6,26 +6,9 @@ By		: NotNull
 Info	: https://www.voidtools.com/forum/viewtopic.php?f=2&t=11194
 
 
-v 1.0.5
-- Yet onother mouse-click handling routine
-  Now support for dragging and resizing Everything window.
- (still no solid airtight solution for the resultlist scrollbar)
-- reorganized code
-- added "hidden" ini entry to overrule _exe and _instance
-  for very special cases.
-- Updated Settings page intro.
-- Working directory for Everything is set to the folder of it's executable.
-
-
-v 1.0.3
-- Added support for %variables% in relevant INI entries.
-
-
-v 1.0.2
-- fixed a typo (removed extra space from path) that caused some filemanagers to be unable to open the selected folder.
-
-v 1.0.1
-- Different mouse-click handling.
+v 1.0.6
+- added support for FreeCommander
+- Textual changes
 
 
 Version history at the end.
@@ -433,10 +416,10 @@ MsgBox We never get here (and that's how it should be)
 		$WindowType = ExplorerFileMan
 	}
 
-;	else If ($ahk_exe = "FreeCommander.exe")	; HAs no easy entry point	; Free Commander
-;	{
-;		$WindowType = FreeCommander
-;	}
+	else If ($ahk_exe = "FreeCommander.exe")	; HAs no easy entry point	; Free Commander
+	{
+		$WindowType = FreeCommander
+	}
 
 	else If ($ahk_class = "#32770")											; Open/Save dialog
 	{
@@ -783,424 +766,6 @@ Return
 	}
 Return
 }
-
-
-
-
-/*
-
-;=============================================================================
-;=============================================================================
-;
-;						GET CURRENT FOLDER  PER WINDOW TYPE
-;
-;=============================================================================
-;=============================================================================
-
-
-;_____________________________________________________________________________
-;
-;						CurrentFolderTotalCMD( _thisID, _thisFOLDER, _thisFILE )
-;_____________________________________________________________________________
-;    
-{
-
-
-			SendMessage 1075, %cm_CopySrcPathToClip%, 0, , ahk_id %_thisID%
-
-		;	Check if valid folder first. Only add it if it is.
-;			If (ErrorLevel = 0) AND ( ValidFolder( clipboard ) )
-	Global $Running_exe
-
-return
-}
-
-
-;_____________________________________________________________________________
-;
-;						CurrentFolderSalamander( _thisID, _thisFOLDER, _thisFILE )
-;_____________________________________________________________________________
-;    
-{
-
-	Global $Running_exe
-
-	If !_thisFILE
-		_thisFOLDER := RTrim( _thisFOLDER , "\")
-	else
-		_thisFOLDER=%_thisFOLDER%%_thisFILE%
-
-	Run, "%$Running_exe%"  -O -A "%_thisFOLDER%",,, $DUMMY
-
-return
-}
-
-
-
-;_____________________________________________________________________________
-;
-;						CurrentFolderFreeCommander( _thisID, _thisFOLDER, _thisFILE )
-;_____________________________________________________________________________
-;    
-{
-;	Details on https://freecommander.com/fchelpxe/en/Commandlineparameters.html
-
-	Global $Running_exe
-
-	Run, "%$Running_exe%"  /C /Z /L="%_thisFOLDER%%_thisFILE%",,, $DUMMY
-
-return
-}
-
-
-
-;_____________________________________________________________________________
-;
-;						CurrentFolderXYPlorer( _thisID, _thisFOLDER, _thisFILE )
-;_____________________________________________________________________________
-;    
-{
-
-	Global $Running_exe
-
-;	If ( _thisFILE = "" )
-;	{
-;		_thisFOLDER := RTrim( _thisFOLDER , "\")
-;	}
-
-		
-		Run, "%$Running_exe%"  "%_thisFOLDER%%_thisFILE%",,, $DUMMY
-;		Run, "%$Running_exe%"  "%_thisFOLDER%",,, $DUMMY
-
-return
-}
-
-
-
-;_____________________________________________________________________________
-;
-;						CurrentFolderDoubleCommander( _thisID, _thisFOLDER, _thisFILE )
-;_____________________________________________________________________________
-;    
-{
-;	Details on https://doublecmd.github.io/doc/en/commandline.html
-
-	Global $Running_exe
-
-	Run, "%$Running_exe%"  -C "%_thisFOLDER%%_thisFILE%",,, $DUMMY
-
-return
-}
-
-
-;_____________________________________________________________________________
-;
-;						CurrentFolderDirectoryOpus( _thisID, _thisFOLDER, _thisFILE )
-;_____________________________________________________________________________
-;    
-{
-;	Details on https://....
-
-	Global $Running_exe
-
-	Run, "%$Running_exe%\..\dopusrt.exe" /CMD GO "%_thisFOLDER%",,, $DUMMY
-
-return
-}
-
-
-;_____________________________________________________________________________
-;
-;						CurrentFolderExplorerFileMan( _thisID, _thisFOLDER, _thisFILE )
-;_____________________________________________________________________________
-;    
-{
-;	REmote Control through COM object
-;	(Based on the research done here: https://autohotkey.com/boards/viewtopic.php?f=5&t=526)
-;	Go through all opened Explorer windows
-;	For the one that has the same ID as our Explorer window:
-;	Navigate to $FolderPath
-;	Doesn't like folderpaths with a # in it if it ends with a "\"
-;	so trim that one from the end.
-
-			For _Exp in ComObjCreate("Shell.Application").Windows	
-			{
-				If ( _thisID = _Exp.Hwnd)
-				{
-					_thisExplorerPath := _Exp.Document.Folder.Self.Path
-
-				;	Check if valid folder first. Don't add it if not.
-					If ( ValidFolder(_thisExplorerPath))
-	_thisFOLDER := RTrim( _thisFOLDER , "\")
-
-
-	For $Exp in ComObjCreate("Shell.Application").Windows
-	{
-		if ( $Exp.hwnd = _thisID )
-		{
-			$Exp.Navigate(_thisFOLDER)
-			break
-		}
-	}
-
-return
-}
-
-
-
-;_____________________________________________________________________________
-;
-;				CurrentFolderOpenSave( _thisID, _thisFOLDER, _thisFILE )
-;_____________________________________________________________________________
-;    
-{
-	Global $DialogType
-
-	WinActivate, ahk_id %_thisID%
-
-	sleep 50
-
-;	Focus Edit1
-	ControlFocus Edit1, ahk_id %_thisID%
-
-	WinGet, ActivecontrolList, ControlList, ahk_id %_thisID%
-
-
-	Loop, Parse, ActivecontrolList, `n	; which addressbar and "Enter" controls to use 
-	{
-		If InStr(A_LoopField, "ToolbarWindow32")
-		{
-		;	ControlGetText _thisToolbarText , %A_LoopField%, ahk_id %_thisID%
-			ControlGet, _ctrlHandle, Hwnd,, %A_LoopField%, ahk_id %_thisID%
-
-		;	Get handle of parent control
-			_parentHandle := DllCall("GetParent", "Ptr", _ctrlHandle)
-
-		;	Get class of parent control
-			WinGetClass, _parentClass, ahk_id %_parentHandle%
-
-			If InStr( _parentClass, "Breadcrumb Parent" )
-			{
-				_UseToolbar := A_LoopField
-			}
-
-			If Instr( _parentClass, "msctls_progress32" )
-			{
-				_EnterToolbar := A_LoopField
-			}	
-		}
-
-	;	Start next round clean
-		_ctrlHandle			:= ""
-		_parentHandle		:= ""
-		_parentClass		:= ""
-	
-	}
-
-	If ( _UseToolbar AND _EnterToolbar )
-	{
-		Loop, 5
-		{
-			SendInput ^l
-			sleep 100
-
-		;	Check and insert folder
-			ControlGetFocus, _ctrlFocus,A
-
-			If ( InStr( _ctrlFocus, "Edit" ) AND ( _ctrlFocus != "Edit1" ) )
-			{
-				Control, EditPaste, %_thisFOLDER%, %_ctrlFocus%, A
-				ControlGetText, _editAddress, %_ctrlFocus%, ahk_id %_thisID%
-				If (_editAddress = _thisFOLDER )
-				{
-					_FolderSet := TRUE
-				}
-			}
-		;	else: 	Try it in the next round
-
-		;	Start next round clean
-			_ctrlFocus := ""
-			_editAddress := ""
-
-		}	Until _FolderSet
-
-
-		
-		If (_FolderSet)
-		{
-		;	Click control to "execute" new folder	
-			ControlClick, %_EnterToolbar%, ahk_id %_thisID%
-
-		;	Focus file name
-			Sleep, 15
-			ControlFocus Edit1, ahk_id %_thisID%
-		}
-		Else
-		{
-		;	What to do if folder is not set?
-		}
-	}
-	Else ; unsupported dialog. At least one of the needed controls is missing
-	{
-		MsgBox This type of dialog can not be handled (yet).`nPlease report it!
-	}
-
-Return
-}
-
-
-
-
-;_____________________________________________________________________________
-;
-;				CurrentFolderOpenSave_SYSLISTVIEW( _thisID, _thisFOLDER, _thisFILE )
-;_____________________________________________________________________________
-;    
-{
-	Global $DialogType
-
-
-	DebugMsg( A_ThisLabel . A_ThisFunc, "ID = " . _thisID . " Folder =  " . _thisFOLDER )
-	
-	
-	WinActivate, ahk_id %_thisID%
-	Sleep, 20
-
-
-;	Read the current text in the "File Name:" box (= $OldText)
-
-	ControlGetText _oldText, Edit1, ahk_id %_thisID%
-	Sleep, 20
-
-
-;	Make sure there exactly 1 \ at the end.
-
-	_thisFOLDER := RTrim( _thisFOLDER , "\")
-	_thisFOLDER := _thisFOLDER . "\"
-
-	Loop, 20
-	{
-		Sleep, 10
-		ControlSetText, Edit1, %_thisFOLDER%, ahk_id %_thisID%
-		ControlGetText, _Edit1, Edit1, ahk_id %_thisID%
-		If ( _Edit1 = _thisFOLDER )
-			_FolderSet := TRUE
-
-	} Until _FolderSet
-
-	If _FolderSet
-	{
-		Sleep, 20
-		ControlFocus Edit1, ahk_id %_thisID%
-		ControlSend Edit1, {Enter}, ahk_id %_thisID%
-
-
-
-	;	Restore  original filename / make empty in case of previous folder
-
-		Sleep, 15
-
-		ControlFocus Edit1, ahk_id %_thisID%
-		Sleep, 20
-
-		Loop, 5
-		{
-			ControlSetText, Edit1, %_oldText%, ahk_id %_thisID%		; set
-			Sleep, 15
-			ControlGetText, _2thisCONTROLTEXT, Edit1, ahk_id %_thisID%		; check
-			If ( _2thisCONTROLTEXT = _oldText )
-				Break
-		}
-	}
-Return
-}
-
-
-
-
-;_____________________________________________________________________________
-;
-;						CurrentFolderXPlorer2( _thisID, _thisFOLDER, _thisFILE )
-;_____________________________________________________________________________
-;    
-{
-	WinActivate, ahk_id %_thisID%
-
-	ControlFocus Edit1, A
-
-
-;	Go to Folder
-	Loop, 5
-	{
-		ControlSetText, Edit1, %_thisFOLDER%%_thisFILE%, A		; set
-		Sleep, 50
-		ControlGetText, $CurControlText, Edit1, A		; check
-		if ($CurControlText = _thisFOLDER_thisFILE)
-			break
-	}
-
-	ControlSend Edit1, {Enter}, A
-
-return
-}
-
-
-
-
-
-;_____________________________________________________________________________
-;
-;						CurrentFolderQDirFileMan( _thisID, _thisFOLDER, _thisFILE )
-;_____________________________________________________________________________
-;    
-{
-
-;	Q-Dir does not respond very well to simulated keypresses.
-;	Only way to make it work is with: key down, followed by key up.
-
-
-	WinActivate, ahk_id %_thisID%
-
-
-
-;	Activate the address bar that belongs to the current pane (alt-s ; case-sensitive)
-;	Q-Dir can have up to 4 address bars ..)
-
-	Sleep, 50
-	SendInput {Alt Down}
-	sleep 15
-	SendInput {s Down}
-	sleep 15
-	SendInput {s Up}
-	Sleep 15
-	SendInput {Alt Up}
-	Sleep 15
-
-
-
-;	Read the current ClassNN
-
-	ControlGetFocus, $ActiveControl, A
-
-
-
-;	Feed FolderPath to this ClassNN
-;	2DO: (with some re-tries to be sure)
-
-	ControlSetText,%$ActiveControl% , %_thisFOLDER%, A
-	Sleep, 50
-
-
-;	Send {Enter}
-
-	SendInput {Enter Down}
-	sleep 15
-	SendInput {Enter Up}
-
-return
-}
-
-*/
 
 
 
@@ -1723,22 +1288,22 @@ ExitApp
 Current version: %$ThisVersion%
 
 JumpToFolder is a little utility that brings the power of Everything to file dialogs and file managers.
-No longer the need to browse through lots of folders, drives and network folders, but go to that folder immediately.
+No longer the need to browse through lots of folders, drives and network folders, but jump to that folder immediately.
+
 
 How to use:
-1. Right-click in an empty part of the file list and choose "Jump To Folder" from the context menu.
-2. Choose a file or folder from the Everything window 
-3. JumpToFolder will change the current folder in the file manager / file dialog to the selected folder.
-
+1. Right-click in an empty part of the file list and choose "Jump To Folder" from the context menu,
+2. Type part of the filename in the appearing Everything window,
+3. Choose a file or folder from the list,
+4. JumpToFolder will change the current folder in the file manager / file dialog to the selected folder.
   
-
 
 
 )
 
 	Gui Font, s10
 	Gui Add, Text, W320, %$IntroText%
-	Gui, Add, Link,, For more information see the <a href="https://www.voidtools.com/forum/viewtopic.php?f=2&t=11194">Everything forum</a>.
+	Gui, Add, Link,, For more information, see the <a href="https://www.voidtools.com/forum/viewtopic.php?f=2&t=11194">Everything forum</a>.
 	Gui Font
 	
 ;------------------------------------------------
@@ -2522,16 +2087,39 @@ V SingleInstance Force closes an already running JumpToFolder.exe,
 
 - GUI: relative positioning of controls.
 
-- Debug start: ahk pad, versie, size; opstartparms, user, elevated
+- Debug start: ahk path, version, size; startparms, user, elevated
 - Write debug info to file too 
-  (requires Exit()/ShutDown() routine instead of ExitApp to close open file handle.
-? how to handle 1.5a instances ith runcount?
+  (requires ShutDown()/similar routine instead of ExitApp to close open file handle.
+? how to handle 1.5a instances with runcount?
 
 
 - pre-populate the search with current path from file manager / -dialog if available); select/highlight it so it can be easily removed. 
 
 - Adv advanced Tab for extra settings? Or keep those ini-only?
 
+---------------------------------------
+
+
+v 1.0.5
+- Yet another mouse-click handling routine
+  Now support for dragging and resizing Everything +window.
+ (still no solid airtight solution for the resultlist scrollbar)
+- reorganized code
+- added "hidden" ini entry to overrule _exe and _instance
+  for very special cases.
+- Updated Settings page intro.
+- Working directory for Everything is set to the folder of it's executable.
+
+
+v 1.0.3
+- Added support for %variables% in relevant INI entries.
+
+
+v 1.0.2
+- fixed a typo (removed extra space from path) that caused some filemanagers to be unable to open the selected folder.
+
+v 1.0.1
+- Different mouse-click handling.
 
 
 
