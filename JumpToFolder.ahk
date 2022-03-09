@@ -1,4 +1,4 @@
-﻿$ThisVersion := "1.0.6"
+﻿$ThisVersion := "1.0.7_DopusDebug1"
 ;
 
 /*
@@ -51,6 +51,9 @@ SetTitleMatchMode, RegEx
 	$OOB_detected_everything_version	:= ""
 	$OOB_everything_instance			:=	""""""
 	$OOB_debug								:= 0	
+
+;	DopusDebug
+	$OOB_slowdown := 200
 	
 
 
@@ -69,11 +72,17 @@ SetTitleMatchMode, RegEx
 	IniRead, $debug,					%$IniFile%, JumpToFolder, debug,	%$OOB_debug%
 	IniRead, $start_everything,	%$IniFile%, JumpToFolder, start_everything
 
+;	DopusDebug
+	IniRead, $slowdown,	%$IniFile%, JumpToFolder, slowdown, %$OOB_slowdown%
+
+
 ;	Expand environment variables in some ini entries
 	$everything_exe 		:= ExpandEnvVars( $everything_exe )
 	$contextmenu_icon		:= ExpandEnvVars( $contextmenu_icon )
 	$everything_instance	:= ExpandEnvVars( $everything_instance )
 	$start_everything		:= ExpandEnvVars( $start_everything )
+
+
 
 
 	DebugMsg( "MAIN" , "Starting JumpToFolder version [" . $ThisVersion . "]" )
@@ -196,6 +205,14 @@ SetTitleMatchMode, RegEx
 	Hotkey, LButton,	HandleClickHotkey, Off
 	Hotkey, Enter,		HandleEnterHotkey, Off
 
+
+;	DopusDebug
+	InputBox, $slowdown, Debug Mode, How far should the brake pedal be pushed (0-500)?,,,,,,,,%$slowdown%
+	IniWrite, %$slowdown%, %$IniFile%, JumpToFolder, slowdown
+	
+;	MsgBox slowdown = [%$slowdown%]
+	
+	
 	
 ;_____________________________________________________________________________
 ;
@@ -252,12 +269,19 @@ Loop	; Start of WinWaitActive/WinWaitNotActive loop.
 
 	WinWaitNotActive
 
+
 		Hotkey, Escape,	Off
 		Hotkey, LButton,	Off
 		Hotkey, Enter,		Off
 
+	;	DopusDebug
+		Sleep %$slowdown%
+
 	;	In case another window was activated before getting the path.
 		WinClose, ahk_id %$EverythingID%
+
+	;	DopusDebug
+		Sleep %$slowdown%
 
 	;	Prepare found path to be fed to the original application (file manager/ -dialog)
 	;	using the Feed%$WindowType% routine.
@@ -315,13 +339,31 @@ MsgBox We never get here (and that's how it should be)
 	}		
 	Else If ( $detected_everything_version == "1.4")
 	{
+	;	DopusDebug
+		Sleep %$slowdown%
+
 		_ClipOrg := ClipBoard
+
+	;	DopusDebug
+		Sleep %$slowdown%
+
 		ClipBoard := ""
+
+	;	DopusDebug
+		Sleep %$slowdown%
+
 		SendMessage, 0x111, %$EVERYTHING_IPC_ID_FILE_COPY_FULL_PATH_AND_NAME%,,, A
-		ClipWait
+		ClipWait,1
 		_FoundPath := Clipboard
+
+	;	DopusDebug
+;		MsgBox _FoundPath = %_FoundPath%
+
 		
 		DebugMsg( A_ThisLabel . A_ThisFunc, "detected_everything_version = [" . $detected_everything_version . "]" . "`r`n" . "Found path = [" . _FoundPath . "]" )
+
+	;	DopusDebug
+		Sleep %$slowdown%
 
 		ClipBoard := _ClipOrg
 	}
@@ -413,7 +455,28 @@ MsgBox We never get here (and that's how it should be)
 	{
 	;	Win10: WorkerW = desktop  CabinetWClass = File Explorer
 	;	Older: Progman = desktop  CabinetWClass = File Explorer
-		$WindowType = ExplorerFileMan
+
+	;	Directory Opus intercept ShellExecute calls and will send them to Opus.
+	;	That will fail with 'normal' Explorer routine.
+	;	So check if shellhook is installed and use different routine.
+	
+		Loop, Reg, HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellExecuteHooks, V
+		{
+			RegRead, _shellHook, HKCR\CLSID\%A_LoopRegName%\InprocServer32
+			If Instr(_shellHook, "dopus")
+			{
+				DopusInstalled := True
+			}
+
+		}
+		If DopusInstalled
+		{
+			$WindowType := "ExplorerWithDopusHook"
+		}
+		Else
+		{
+			$WindowType := "ExplorerFileMan"
+		}
 	}
 
 	else If ($ahk_exe = "FreeCommander.exe")	; HAs no easy entry point	; Free Commander
@@ -559,6 +622,12 @@ Return _thisID
 ;
 ;	Check if path exists; returns True/False
 {
+
+;		_thisPath := Trim( _thisFOLDER , "\")
+;	_withoutQuotes := Trim(_thisPath," """"")
+;	MsgBox  _thisPath = [%_withoutQuotes%]
+
+;	IfNotExist, %_withoutQuotes%
 	IfNotExist, %_thisPath%
 	{
 		return false
@@ -586,6 +655,8 @@ Return _thisID
 
 		if InStr(FileExist(_thisPath), "D")
 		{	; it's a folder
+		;	DopusDebug
+			Sleep %$slowdown%
 			$FolderPath  := _thisPath
 			$FileName := ""
 		}
@@ -594,6 +665,8 @@ Return _thisID
 			SplitPath, _thisPath, $FileName, $FolderPath
 			
 		}
+	;	DopusDebug
+		Sleep %$slowdown%
 
 		DebugMsg( A_ThisLabel . A_ThisFunc , "dir = [" . $FolderPath . "]`r`n  Name = [" . $FileName . "]" )
 
@@ -635,23 +708,45 @@ Return
 
 	;	Double-click in resultlist detected, grab file/foldername
 
+	;	DopusDebug
+		Sleep %$slowdown%
+
 		$FoundPath := GetPathFromEverything($EverythingID)
+
+	;	Strip double-quotes and spaces
+		$FoundPath := Trim( $FoundPath, " """"" )
+		
+	;	Trim trailing backslash?
+		$FoundPath := RTrim( $FoundPath, "\" )
+	
+		MsgBox $FoundPath = [%$FoundPath%]
 
 		DebugMsg( A_ThisLabel . A_ThisFunc, "Found :`r`n[" . $FoundPath . "]" )
 
+	;	DopusDebug
+		Sleep %$slowdown%
 
 		If ( $FoundPath )
 		{
 			DebugMsg( A_ThisLabel .  A_ThisFunc, "You selected path:`r`n" . "[" . $FoundPath . "]" )
 		}
-		If (ValidPath($FoundPath))
+
+	;	DopusDebug
+		Sleep %$slowdown%
+
+		If ValidPath($FoundPath)
 		{
 		;	We got our path; close Everything
 			WinClose, ahk_id %$EverythingID%
 
+		;	DopusDebug
+			Sleep %$slowdown%
 		}
 		else
 		{
+		;	DopusDebug
+			Sleep %$slowdown%
+
 			DebugMsg( A_ThisLabel . A_ThisFunc, "NOT a valid Path:`r`n[" . $FoundPath . "]" )
 			MsgBox,,,Path could not be found. Maybe off-line?`r`n[%$FoundPath%], 3
 			$FoundPath := ""
@@ -693,6 +788,8 @@ Return
 	;	ENTER in resultlist detected, grab file/foldername
 
 		$FoundPath := GetPathFromEverything($EverythingID)
+	;	DopusDebug
+		Sleep %$slowdown%
 
 		DebugMsg( A_ThisLabel . A_ThisFunc, "Found :`r`n[" . $FoundPath . "]" )
 
@@ -913,6 +1010,103 @@ return
 			break
 		}
 	}
+
+return
+}
+
+
+
+;_____________________________________________________________________________
+;
+						FeedExplorerWithDopusHook( _thisID, _thisFOLDER, _thisFILE )
+;_____________________________________________________________________________
+;    
+{
+MsgBox Start FeedExplorerWithDopusHook
+;	Global $DialogType
+
+;	WinActivate, ahk_id %_thisID%
+
+	sleep 50
+
+	WinGet, ActivecontrolList, ControlList, ahk_id %_thisID%
+
+
+	Loop, Parse, ActivecontrolList, `n	; which addressbar and "Enter" controls to use 
+	{
+		If InStr(A_LoopField, "ToolbarWindow32")
+		{
+			ControlGet, _ctrlHandle, Hwnd,, %A_LoopField%, ahk_id %_thisID%
+
+		;	Get handle of parent control
+			_parentHandle := DllCall("GetParent", "Ptr", _ctrlHandle)
+
+		;	Get class of parent control
+			WinGetClass, _parentClass, ahk_id %_parentHandle%
+
+			If InStr( _parentClass, "Breadcrumb Parent" )
+			{
+				_UseToolbar := A_LoopField
+			}
+
+			If Instr( _parentClass, "msctls_progress32" )
+			{
+				_EnterToolbar := A_LoopField
+			}	
+		}
+
+	;	Start next round clean
+		_ctrlHandle			:= ""
+		_parentHandle		:= ""
+		_parentClass		:= ""
+	
+	}
+
+	If ( _UseToolbar AND _EnterToolbar )
+	{
+		Loop, 5
+		{
+			SendInput ^l
+			sleep 100
+
+		;	Check and insert folder
+			ControlGetFocus, _ctrlFocus, ahk_id %_thisID%
+
+			If InStr( _ctrlFocus, "Edit" )
+			{
+				Control, EditPaste, %_thisFOLDER%, %_ctrlFocus%, ahk_id %_thisID%
+				ControlGetText, _editAddress, %_ctrlFocus%, ahk_id %_thisID%
+				If (_editAddress = _thisFOLDER )
+				{
+					_FolderSet := TRUE
+				}
+			}
+		;	else: 	Try it in the next round
+
+		;	Start next round clean
+			_ctrlFocus := ""
+			_editAddress := ""
+
+		}	Until _FolderSet
+
+
+		
+		If (_FolderSet)
+		{
+		;	Click control to "execute" new folder	
+			ControlClick, %_EnterToolbar%, ahk_id %_thisID%
+		}
+		Else
+		{
+		;	What to do if folder is not set?
+		}
+	}
+	Else ; unsupported dialog. At least one of the needed controls is missing
+	{
+		MsgBox This type of dialog can not be handled (yet).`nPlease report it!
+	}
+
+
 
 return
 }
@@ -1379,9 +1573,13 @@ In all applications:
 File managers:
 - Windows File Explorer
 - Altap Salamander
+- Directory Opus
 - Double Commander
+- FreeCommander
 - Q-Dir
+- Total Commander
 - XPlorer2
+- XyPlorer
 
 )
 
@@ -2039,7 +2237,6 @@ return
 
 ;	Write to INI
 	IniWrite, %$everything_exe%,   		%$IniFile%, JumpToFolder, everything_exe
-	IniWrite, %$also_search_files%,		%$IniFile%, JumpToFolder, also_search_files
 	IniWrite, %$sort_by%,					%$IniFile%, JumpToFolder, sort_by
 	IniWrite, %$sort_ascending%,			%$IniFile%, JumpToFolder, sort_ascending
 	IniWrite, %$contextmenu_text%,		%$IniFile%, JumpToFolder, contextmenu_text
