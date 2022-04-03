@@ -1,14 +1,22 @@
-﻿$ThisVersion := "1.0.6"
-;
+﻿$ThisVersion := "1.0.8"
+
+;@Ahk2Exe-SetVersion 1.0.8
+;@Ahk2Exe-SetName JumpToFolder
+;@Ahk2Exe-SetDescription Change active folder using Everything.
+;@Ahk2Exe-SetCopyright NotNull
 
 /*
 By		: NotNull
 Info	: https://www.voidtools.com/forum/viewtopic.php?f=2&t=11194
 
 
-v 1.0.6
-- added support for FreeCommander
-- Textual changes
+
+v 1.0.8
+- Added support for Directory Opus
+- Added routine to select the file in file managers
+- BugFix: could be waiting on clipboard change indefinitely under certain conditions 
+- Improved timing
+
 
 
 Version history at the end.
@@ -51,6 +59,9 @@ SetTitleMatchMode, RegEx
 	$OOB_detected_everything_version	:= ""
 	$OOB_everything_instance			:=	""""""
 	$OOB_debug								:= 0	
+
+;	DopusDebug
+;	$OOB_slowdown := 200
 	
 
 
@@ -68,6 +79,7 @@ SetTitleMatchMode, RegEx
 	IniRead, $everything_instance,%$IniFile%, JumpToFolder, everything_instance,	%$OOB_everything_instance%
 	IniRead, $debug,					%$IniFile%, JumpToFolder, debug,	%$OOB_debug%
 	IniRead, $start_everything,	%$IniFile%, JumpToFolder, start_everything
+
 
 ;	Expand environment variables in some ini entries
 	$everything_exe 		:= ExpandEnvVars( $everything_exe )
@@ -196,7 +208,7 @@ SetTitleMatchMode, RegEx
 	Hotkey, LButton,	HandleClickHotkey, Off
 	Hotkey, Enter,		HandleEnterHotkey, Off
 
-	
+
 ;_____________________________________________________________________________
 ;
 ;   					REGULAR CODE
@@ -211,7 +223,9 @@ SetTitleMatchMode, RegEx
 
 	DebugMsg(  "MAIN" , "Detected WindowType = [" . $WindowType . "]")
 
-;	WIP
+;	Next version; Read the currently active path in file dialog or -manager.
+;	And add thgat as the Everything search path.
+; WIP
 ;	If IsFunc( "PathFrom" . $WindowType )
 ;		MsgBox PathFrom%$WindowType% exists
 
@@ -252,12 +266,15 @@ Loop	; Start of WinWaitActive/WinWaitNotActive loop.
 
 	WinWaitNotActive
 
+
 		Hotkey, Escape,	Off
 		Hotkey, LButton,	Off
 		Hotkey, Enter,		Off
 
+
 	;	In case another window was activated before getting the path.
 		WinClose, ahk_id %$EverythingID%
+
 
 	;	Prepare found path to be fed to the original application (file manager/ -dialog)
 	;	using the Feed%$WindowType% routine.
@@ -315,13 +332,20 @@ MsgBox We never get here (and that's how it should be)
 	}		
 	Else If ( $detected_everything_version == "1.4")
 	{
+
 		_ClipOrg := ClipBoard
+
 		ClipBoard := ""
+		Sleep 50
+
 		SendMessage, 0x111, %$EVERYTHING_IPC_ID_FILE_COPY_FULL_PATH_AND_NAME%,,, A
-		ClipWait
+		ClipWait,1
 		_FoundPath := Clipboard
+
 		
 		DebugMsg( A_ThisLabel . A_ThisFunc, "detected_everything_version = [" . $detected_everything_version . "]" . "`r`n" . "Found path = [" . _FoundPath . "]" )
+
+		Sleep 20
 
 		ClipBoard := _ClipOrg
 	}
@@ -413,10 +437,11 @@ MsgBox We never get here (and that's how it should be)
 	{
 	;	Win10: WorkerW = desktop  CabinetWClass = File Explorer
 	;	Older: Progman = desktop  CabinetWClass = File Explorer
-		$WindowType = ExplorerFileMan
+
+		$WindowType := "ExplorerFileMan"
 	}
 
-	else If ($ahk_exe = "FreeCommander.exe")	; HAs no easy entry point	; Free Commander
+	else If ($ahk_exe = "FreeCommander.exe")	; Has no easy entry point	; Free Commander
 	{
 		$WindowType = FreeCommander
 	}
@@ -432,7 +457,8 @@ MsgBox We never get here (and that's how it should be)
 		}
 		else
 		{
-			MsgBox Not a supported  WindowType
+			MsgBox This is not (yet) supported in %$ahk_exe%  ..				; Rest
+		;	MsgBox Not a supported  WindowType
 		}
 	}
 
@@ -522,7 +548,7 @@ return
 	
 		Run, "%_everything_exe%" -sort "%$sort_by%" -instance "%$everything_instance%" -details -filter "JumpToFolder" -newwindow  -search "%_folders%",%_everything_workdir%,, $EvPID
 	}
-	else	; special case
+	else	; special cases if start_everything INI-entry is defined.
 	{
 	;	Get Working directory
 		SplitPath, $start_everything, , _everything_workdir
@@ -559,6 +585,12 @@ Return _thisID
 ;
 ;	Check if path exists; returns True/False
 {
+
+;		_thisPath := Trim( _thisFOLDER , "\")
+;	_withoutQuotes := Trim(_thisPath," """"")
+;	MsgBox  _thisPath = [%_withoutQuotes%]
+
+;	IfNotExist, %_withoutQuotes%
 	IfNotExist, %_thisPath%
 	{
 		return false
@@ -586,6 +618,8 @@ Return _thisID
 
 		if InStr(FileExist(_thisPath), "D")
 		{	; it's a folder
+		;	DopusDebug
+;			Sleep %$slowdown%
 			$FolderPath  := _thisPath
 			$FileName := ""
 		}
@@ -594,6 +628,8 @@ Return _thisID
 			SplitPath, _thisPath, $FileName, $FolderPath
 			
 		}
+	;	DopusDebug
+;		Sleep %$slowdown%
 
 		DebugMsg( A_ThisLabel . A_ThisFunc , "dir = [" . $FolderPath . "]`r`n  Name = [" . $FileName . "]" )
 
@@ -635,8 +671,15 @@ Return
 
 	;	Double-click in resultlist detected, grab file/foldername
 
+
 		$FoundPath := GetPathFromEverything($EverythingID)
 
+	;	Strip double-quotes and spaces
+		$FoundPath := Trim( $FoundPath, " """"" )
+		
+	;	Trim trailing backslash?
+		$FoundPath := RTrim( $FoundPath, "\" )
+	
 		DebugMsg( A_ThisLabel . A_ThisFunc, "Found :`r`n[" . $FoundPath . "]" )
 
 
@@ -644,7 +687,9 @@ Return
 		{
 			DebugMsg( A_ThisLabel .  A_ThisFunc, "You selected path:`r`n" . "[" . $FoundPath . "]" )
 		}
-		If (ValidPath($FoundPath))
+
+
+		If ValidPath($FoundPath)
 		{
 		;	We got our path; close Everything
 			WinClose, ahk_id %$EverythingID%
@@ -652,6 +697,7 @@ Return
 		}
 		else
 		{
+
 			DebugMsg( A_ThisLabel . A_ThisFunc, "NOT a valid Path:`r`n[" . $FoundPath . "]" )
 			MsgBox,,,Path could not be found. Maybe off-line?`r`n[%$FoundPath%], 3
 			$FoundPath := ""
@@ -693,6 +739,7 @@ Return
 	;	ENTER in resultlist detected, grab file/foldername
 
 		$FoundPath := GetPathFromEverything($EverythingID)
+		Sleep 20
 
 		DebugMsg( A_ThisLabel . A_ThisFunc, "Found :`r`n[" . $FoundPath . "]" )
 
@@ -882,10 +929,11 @@ return
 
 	Global $Running_exe
 
-	Run, "%$Running_exe%\..\dopusrt.exe" /CMD GO "%_thisFOLDER%",,, $DUMMY
+	Run, "%$Running_exe%\..\dopusrt.exe" /CMD GO "%_thisFOLDER%%_thisFILE%",,, $DUMMY
 
 return
 }
+
 
 
 ;_____________________________________________________________________________
@@ -903,13 +951,37 @@ return
 ;	so trim that one from the end.
 
 	_thisFOLDER := RTrim( _thisFOLDER , "\")
+;	If ( _thisFILE )
+;	{
+;		_thisFILE := "\" . _thisFILE
+;	}
 
 
 	For $Exp in ComObjCreate("Shell.Application").Windows
 	{
-		if ( $Exp.hwnd = _thisID )
+		try  ; Attempts to execute code.
 		{
-			$Exp.Navigate(_thisFOLDER)
+			_checkID := $Exp.hwnd
+;			MsgBox CheckID = %_checkID%
+		}
+		catch e  ; Handles the errors that Opus will generate.
+		{
+			; Do nothing. Just ignore error.
+			; Proceed to the next Explorer instance
+		}
+
+		if ( _thisID = _checkID )
+		{
+		;	Go to folder
+			$Exp.Navigate( _thisFOLDER )
+			
+		;	Select the file (if defined)
+			If ( _thisFILE )
+			{
+				sleep 100
+				_allfiles := $Exp.Document.Folder.Items
+				$Exp.Document.SelectItem(_allfiles.Item(_thisFILE), 0x1D)
+			}
 			break
 		}
 	}
@@ -1379,9 +1451,13 @@ In all applications:
 File managers:
 - Windows File Explorer
 - Altap Salamander
+- Directory Opus
 - Double Commander
+- FreeCommander
 - Q-Dir
+- Total Commander
 - XPlorer2
+- XyPlorer
 
 )
 
@@ -2039,7 +2115,6 @@ return
 
 ;	Write to INI
 	IniWrite, %$everything_exe%,   		%$IniFile%, JumpToFolder, everything_exe
-	IniWrite, %$also_search_files%,		%$IniFile%, JumpToFolder, also_search_files
 	IniWrite, %$sort_by%,					%$IniFile%, JumpToFolder, sort_by
 	IniWrite, %$sort_ascending%,			%$IniFile%, JumpToFolder, sort_ascending
 	IniWrite, %$contextmenu_text%,		%$IniFile%, JumpToFolder, contextmenu_text
@@ -2091,13 +2166,19 @@ V SingleInstance Force closes an already running JumpToFolder.exe,
 - Write debug info to file too 
   (requires ShutDown()/similar routine instead of ExitApp to close open file handle.
 ? how to handle 1.5a instances with runcount?
-
+- Talk to TC and XY without using clipboard 
+  (perfectly possible; implement it if all is stable)
 
 - pre-populate the search with current path from file manager / -dialog if available); select/highlight it so it can be easily removed. 
 
-- Adv advanced Tab for extra settings? Or keep those ini-only?
+- Advanced Tab for extra settings? Or keep those ini-only?
 
 ---------------------------------------
+
+
+v 1.0.6
+- added support for FreeCommander
+- Textual changes
 
 
 v 1.0.5
