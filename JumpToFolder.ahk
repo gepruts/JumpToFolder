@@ -1,6 +1,6 @@
-﻿$ThisVersion := "1.0.8"
+﻿$ThisVersion := "1.0.9"
 
-;@Ahk2Exe-SetVersion 1.0.8
+;@Ahk2Exe-SetVersion 1.0.9
 ;@Ahk2Exe-SetName JumpToFolder
 ;@Ahk2Exe-SetDescription Change active folder using Everything.
 ;@Ahk2Exe-SetCopyright NotNull
@@ -9,7 +9,8 @@
 By		: NotNull
 Info	: https://www.voidtools.com/forum/viewtopic.php?f=2&t=11194
 
-
+v 1.0.9
+- BugFix: Fixed support for DoubleCommander
 
 v 1.0.8
 - Added support for Directory Opus
@@ -37,7 +38,6 @@ SendMode Input
 SetBatchLines -1
 SetWorkingDir %A_ScriptDir%
 SetTitleMatchMode, RegEx
-
 
 	$IniFile := "JumpToFolder.ini"
 
@@ -115,7 +115,7 @@ SetTitleMatchMode, RegEx
 	}
 	Else														; 32-bit Win vs 64-bit ahk
 	{
-		MsgBox You need the 32-bit version of JumpToFolder
+		MsgBox You need the 32-bit version of JumpToFoldDer
 		ExitApp
 	}
 
@@ -289,7 +289,7 @@ Loop	; Start of WinWaitActive/WinWaitNotActive loop.
 			$FolderPath := $FolderPath . "\"
 
 			DebugMsg( A_ThisLabel . A_ThisFunc, "$FolderPath = [" .  $FolderPath .  "]`r`n$FileName = [" . $FileName . "]")
-
+			
 			Feed%$WindowType%( $WinID, $FolderPath, $FileName )
 		}
 		ExitApp
@@ -379,7 +379,6 @@ MsgBox We never get here (and that's how it should be)
 ;	We need this for some filemanagers that will be (re)started with parameters.
 
 	WinGet, $Running_exe, ProcessPath, ahk_id %$WinID%
-
 	
 ;	Define window type (for usage later on)
 ;	Detection preference order: 1. ahk_class 2. ahk_exe 
@@ -391,6 +390,10 @@ MsgBox We never get here (and that's how it should be)
 		ExitApp
 	}
 
+	else If ($ahk_class = "DClass" or $ahk_exe = "doublecmd.exe")											; Double Commander
+	{
+		$WindowType = DoubleCommander
+	}
 
 	else If ($ahk_class = "TTOTAL_CMD")										; Total Commander
 	{
@@ -407,11 +410,6 @@ MsgBox We never get here (and that's how it should be)
 	else If ($ahk_class = "dopus.lister")									; Directory Opus
 	{
 		$WindowType = DirectoryOpus
-	}
-
-	else If ($ahk_class = "DClass")											; Double Commander
-	{
-		$WindowType = DoubleCommander
 	}
 
 ;	Q-Dir has a semi-random ahk_class: class ATL:000000014018D720
@@ -912,8 +910,8 @@ return
 ;	Details on https://doublecmd.github.io/doc/en/commandline.html
 
 	Global $Running_exe
-
-	Run, "%$Running_exe%"  -C "%_thisFOLDER%%_thisFILE%",,, $DUMMY
+	
+	Run, "%$Running_exe%" -C -T "%_thisFOLDER%%_thisFILE%"
 
 return
 }
